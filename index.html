@@ -802,7 +802,18 @@ ul { list-style: none; }
     height: auto;
     overflow: visible;
   }
-  .board-col .col-header { position: sticky; top: 0; z-index: 2; }
+  /* Non-sticky headers on mobile (content-area is the scroll container) */
+  .board-col .col-header {
+    position: static;
+    top: auto;
+    z-index: auto;
+    background: transparent;
+  }
+  .board-col .col-header h3 {
+    background: var(--bg-column);
+    padding: 8px 4px;
+    margin-bottom: 4px;
+  }
   .board-col .col-cards {
     max-height: none;
     overflow-y: visible;
