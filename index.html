@@ -1175,10 +1175,10 @@ function setSyncStatus(s) {
 }
 
 function initSupabaseSync() {
-  if (typeof supabaseClient === 'undefined') { setSyncStatus('error'); return; }
+  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) { setSyncStatus('error'); return; }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { setSyncStatus('error'); return; }
 
-  supabase = supabaseClient.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     realtime: { heartbeatIntervalMs: 15000 },
   });
 
