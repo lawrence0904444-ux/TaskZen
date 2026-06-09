@@ -1071,8 +1071,8 @@ const STORAGE_KEY = 'taskzen_state';
 const SUPABASE_URL = 'https://rbqylzyujkadhlahaklw.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_J5-ECiaQX6aRDL4kfkFV5A_i3abkCYu';
 const SYNC_ROOM = new URLSearchParams(location.search).get('room') || 'default';
-let supabase = null;
-let supabaseUnsub = null;
+let sb = null;
+let sbUnsub = null;
 let syncDebounceTimer = null;
 let isSyncing = false;
 
@@ -1178,12 +1178,12 @@ function initSupabaseSync() {
   if (typeof window.supabase === 'undefined' || !window.supabase.createClient) { setSyncStatus('error'); return; }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { setSyncStatus('error'); return; }
 
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     realtime: { heartbeatIntervalMs: 15000 },
   });
 
   // Subscribe to real-time changes for our room
-  supabaseUnsub = supabase.channel('sync-' + SYNC_ROOM)
+  sbUnsub = sb.channel('sync-' + SYNC_ROOM)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'sync_state', filter: `room=eq.${SYNC_ROOM}` },
@@ -1218,11 +1218,11 @@ function queueSupabaseSync() {
 }
 
 async function pushToSupabase() {
-  if (!supabase || isSyncing) return;
+  if (!sb || isSyncing) return;
   isSyncing = true;
   setSyncStatus('syncing');
   try {
-    const { error } = await supabase.from('sync_state').upsert({
+    const { error } = await sb.from('sync_state').upsert({
       room: SYNC_ROOM,
       tasks: state.tasks,
       next_id: state.nextId,
@@ -1239,10 +1239,10 @@ async function pushToSupabase() {
 }
 
 async function pullFromSupabase() {
-  if (!supabase) return;
+  if (!sb) return;
   setSyncStatus('syncing');
   try {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('sync_state')
       .select('tasks, next_id, last_updated')
       .eq('room', SYNC_ROOM)
@@ -1267,7 +1267,7 @@ function startSupabaseSync() {
   initSupabaseSync();
   // Periodic pull as fallback in case Realtime misses an event
   supabasePullTimer = setInterval(() => {
-    if (supabase) pullFromSupabase();
+    if (sb) pullFromSupabase();
   }, 30000);
 }
 
