@@ -14,8 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 <!-- SortableJS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
-<!-- PeerJS -->
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <style>
 /* ============================================================
    DESIGN TOKENS — 禪意美學設計系統
@@ -1067,10 +1067,14 @@ ul { list-style: none; }
 // STATE
 // ============================================================
 const STORAGE_KEY = 'taskzen_state';
-// Peer-to-peer sync (PeerJS / WebRTC)
-const PEER_ROOM = 'taskzen-' + (new URLSearchParams(location.search).get('room') || 'default');
-let peer = null;
-let peerConnections = []; // array of DataConnection objects
+// Supabase sync config
+const SUPABASE_URL = ''; // 👈 填入你的 Supabase Project URL
+const SUPABASE_ANON_KEY = ''; // 👈 填入你的 Supabase anon/public key
+const SYNC_ROOM = new URLSearchParams(location.search).get('room') || 'default';
+let supabase = null;
+let supabaseUnsub = null;
+let syncDebounceTimer = null;
+let isSyncing = false;
 
 const DEFAULT_STATE = {
   tasks: [],
@@ -1158,16 +1162,8 @@ function broadcastChange() {
 }
 
 // ============================================================
-// CROSS-DEVICE SYNC (PeerJS / WebRTC)
+// CROSS-DEVICE SYNC (Supabase Realtime)
 // ============================================================
-let peerReconnectTimer = null;
-
-function clearPeer() {
-  clearTimeout(peerReconnectTimer);
-  if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
-  peerConnections = [];
-}
-
 function setSyncStatus(s) {
   const el = document.getElementById('syncStatus');
   if (!el) return;
@@ -1175,89 +1171,104 @@ function setSyncStatus(s) {
   if (s === 'syncing') { el.textContent = '⟳'; el.classList.add('syncing'); }
   else if (s === 'ok') { el.textContent = '✓'; el.classList.add('ok'); }
   else if (s === 'error') { el.textContent = '⚠'; el.classList.add('error'); }
-  else if (s === 'peers') { el.textContent = '⟐'; el.classList.add('ok'); }
   else { el.textContent = '○'; }
 }
 
-function sendStateTo(conn) {
-  try { conn.send({ type: 'sync', tasks: state.tasks, nextId: state.nextId, lastUpdated: Date.now() }); }
-  catch (e) { /* ignore */ }
-}
+function initSupabaseSync() {
+  if (typeof supabaseClient === 'undefined') { setSyncStatus('error'); return; }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { setSyncStatus('error'); return; }
 
-function broadcastToPeers() {
-  state.lastUpdated = Date.now();
-  peerConnections = peerConnections.filter(c => c.open);
-  peerConnections.forEach(c => sendStateTo(c));
-}
-
-function onPeerData(data) {
-  if (data && data.type === 'sync' && data.lastUpdated > state.lastUpdated) {
-    state.tasks = data.tasks;
-    state.nextId = data.nextId || state.nextId;
-    state.lastUpdated = data.lastUpdated;
-    renderAll();
-    showToast('🔄 已同步其他裝置的更新', 'success');
-  }
-}
-
-function setupPeerConnection(conn) {
-  conn.on('data', onPeerData);
-  conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
-  conn.on('close', () => {
-    peerConnections = peerConnections.filter(c => c !== conn);
-    setSyncStatus(peerConnections.length ? 'peers' : 'ok');
+  supabase = supabaseClient.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    realtime: { heartbeatIntervalMs: 15000 },
   });
-}
 
-function schedulePeerReconnect() {
-  clearTimeout(peerReconnectTimer);
-  peerReconnectTimer = setTimeout(() => {
-    clearPeer();
-    initPeerSync();
-  }, 5000);
-}
-
-function initPeerSync() {
-  if (typeof Peer === 'undefined') { setSyncStatus('error'); return; }
-
-  try {
-    peer = new Peer(PEER_ROOM);
-
-    peer.on('open', () => {
-      setSyncStatus('ok');
-      // Host mode — accept incoming connections
-      peer.on('connection', (conn) => setupPeerConnection(conn));
-    });
-
-    peer.on('connection', (conn) => setupPeerConnection(conn));
-
-    peer.on('error', (err) => {
-      if (err.type === 'unavailable-id') {
-        // Room exists — join as guest
-        clearPeer();
-        peer = new Peer();
-        peer.on('open', () => {
-          const conn = peer.connect(PEER_ROOM);
-          if (conn) setupPeerConnection(conn);
-          else { setSyncStatus('error'); schedulePeerReconnect(); }
-        });
-        peer.on('error', () => { setSyncStatus('error'); schedulePeerReconnect(); });
-      } else if (err.type === 'disconnected') {
-        schedulePeerReconnect();
-      } else {
+  // Subscribe to real-time changes for our room
+  supabaseUnsub = supabase.channel('sync-' + SYNC_ROOM)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'sync_state', filter: `room=eq.${SYNC_ROOM}` },
+      (payload) => {
+        const data = payload.new;
+        if (!data || !data.tasks) return;
+        // Ignore our own writes (same lastUpdated)
+        if (data.last_updated > state.lastUpdated) {
+          // Remote change is newer — merge
+          state.tasks = data.tasks;
+          state.nextId = data.next_id || state.nextId;
+          state.lastUpdated = data.last_updated;
+          renderAll();
+          showToast('🔄 已同步其他裝置的更新', 'success');
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setSyncStatus('ok');
+        // Fetch latest from server on first connect
+        pullFromSupabase();
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         setSyncStatus('error');
-        schedulePeerReconnect();
       }
     });
+}
 
-    peer.on('disconnected', () => schedulePeerReconnect());
+function queueSupabaseSync() {
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(pushToSupabase, 500);
+}
 
-    // Clean up on page unload
-    window.addEventListener('beforeunload', clearPeer);
-  } catch (e) {
+async function pushToSupabase() {
+  if (!supabase || isSyncing) return;
+  isSyncing = true;
+  setSyncStatus('syncing');
+  try {
+    const { error } = await supabase.from('sync_state').upsert({
+      room: SYNC_ROOM,
+      tasks: state.tasks,
+      next_id: state.nextId,
+      last_updated: state.lastUpdated,
+    }, { onConflict: 'room' });
+    if (error) throw error;
+    setSyncStatus('ok');
+  } catch (err) {
+    console.warn('Supabase upsert failed:', err);
     setSyncStatus('error');
-    schedulePeerReconnect();
+  } finally {
+    isSyncing = false;
   }
+}
+
+async function pullFromSupabase() {
+  if (!supabase) return;
+  setSyncStatus('syncing');
+  try {
+    const { data, error } = await supabase
+      .from('sync_state')
+      .select('tasks, next_id, last_updated')
+      .eq('room', SYNC_ROOM)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+    if (data && data.tasks && data.last_updated > state.lastUpdated) {
+      state.tasks = data.tasks;
+      state.nextId = data.next_id || state.nextId;
+      state.lastUpdated = data.last_updated;
+      renderAll();
+    }
+    setSyncStatus('ok');
+  } catch (err) {
+    console.warn('Supabase pull failed:', err);
+    setSyncStatus('error');
+  }
+}
+
+// Initialize first sync on connect, then fall back to a periodic pull
+let supabasePullTimer = null;
+function startSupabaseSync() {
+  initSupabaseSync();
+  // Periodic pull as fallback in case Realtime misses an event
+  supabasePullTimer = setInterval(() => {
+    if (supabase) pullFromSupabase();
+  }, 30000);
 }
 
 // ============================================================
@@ -1329,7 +1340,7 @@ function renderAll() {
   renderSidebarCounts();
   renderAnalytics();
   saveState();
-  broadcastToPeers();
+  queueSupabaseSync();
 }
 
 function renderBoard() {
@@ -1873,8 +1884,8 @@ function init() {
   // Highlight current filter
   document.querySelector(`.nav-item[data-filter="${state.filter || 'all'}"]`)?.classList.add('active');
 
-  // Start cross-device sync (PeerJS / WebRTC)
-  initPeerSync();
+  // Start cross-device sync (Supabase Realtime)
+  startSupabaseSync();
 
   // Re-check daily tasks when tab becomes visible (user might cross midnight)
   document.addEventListener('visibilitychange', () => {
