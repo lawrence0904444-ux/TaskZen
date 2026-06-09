@@ -49,10 +49,10 @@
   --color-done: #8FAD8A;
 
   /* 優先級色彩 */
-  --pri-q1: #D4726A;
-  --pri-q2: #7A9EB1;
-  --pri-q3: #E8A87C;
-  --pri-q4: #B0A9A2;
+  --pri-q1: #F4A6A0;
+  --pri-q2: #8FAE8B;
+  --pri-q3: #E2B06A;
+  --pri-q4: #8C9BA5;
 
   /* 強調 */
   --accent: #C4A882;
@@ -555,6 +555,30 @@ ul { list-style: none; }
   box-shadow: 0 0 0 3px var(--accent-light);
 }
 .form-textarea { resize: vertical; min-height: 80px; }
+
+/* Custom priority select */
+.custom-select { position: relative; }
+.custom-select__trigger {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); background: var(--bg-card);
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  user-select: none;
+}
+.custom-select__dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.custom-select__text { flex: 1; font-size: 0.875rem; color: var(--text-primary); }
+.custom-select__arrow { color: var(--text-secondary); font-size: 0.75rem; }
+.custom-select__options {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20;
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); overflow: hidden; display: none;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+.custom-select.open .custom-select__options { display: block; }
+.custom-select__option {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer; font-size: 0.875rem;
+}
+.custom-select__option:hover { background: rgba(0,0,0,0.03); }
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -729,10 +753,10 @@ ul { list-style: none; }
   font-size: 0.6875rem;
   font-weight: 500;
 }
-.pri-badge.q1 { background: rgba(212, 114, 106, 0.12); color: var(--pri-q1); }
-.pri-badge.q2 { background: rgba(122, 158, 177, 0.15); color: var(--pri-q2); }
-.pri-badge.q3 { background: rgba(232, 168, 124, 0.15); color: var(--pri-q3); }
-.pri-badge.q4 { background: rgba(176, 169, 162, 0.15); color: var(--pri-q4); }
+.pri-badge.q1 { background: rgba(244, 166, 160, 0.18); color: var(--pri-q1); }
+.pri-badge.q2 { background: rgba(143, 174, 139, 0.18); color: var(--pri-q2); }
+.pri-badge.q3 { background: rgba(226, 176, 106, 0.18); color: var(--pri-q3); }
+.pri-badge.q4 { background: rgba(140, 155, 165, 0.18); color: var(--pri-q4); }
 
 /* ============================================================
    RESPONSIVE
@@ -940,7 +964,7 @@ ul { list-style: none; }
         <span class="badge" id="filterAllCount">0</span>
       </div>
       <div class="nav-item" data-filter="q1" onclick="setFilter('q1')">
-        <span class="icon">⊙</span> Q1 重要·緊急
+        <span class="icon">🔴</span> Q1 重要·緊急
         <span class="badge" id="filterQ1Count">0</span>
       </div>
       <div class="nav-item" data-filter="today" onclick="setFilter('today')">
@@ -1016,11 +1040,36 @@ ul { list-style: none; }
       <div class="form-row">
         <div class="form-group">
           <label class="form-label" for="taskPriority">優先級</label>
-          <select class="form-select" id="taskPriority">
-            <option value="q2">Q2 重要·不緊急</option>
+          <div class="custom-select" id="prioritySelect" data-target="taskPriority">
+            <div class="custom-select__trigger">
+              <span class="custom-select__dot" data-v="q2" style="background:var(--pri-q2)"></span>
+              <span class="custom-select__text">Q2 重要·不緊急</span>
+              <span class="custom-select__arrow">▾</span>
+            </div>
+            <div class="custom-select__options">
+              <div class="custom-select__option" data-value="q2" data-color="var(--pri-q2)">
+                <span class="custom-select__dot"></span>
+                <span>Q2 重要·不緊急</span>
+              </div>
+              <div class="custom-select__option" data-value="q1" data-color="var(--pri-q1)">
+                <span class="custom-select__dot"></span>
+                <span>Q1 重要·緊急</span>
+              </div>
+              <div class="custom-select__option" data-value="q3" data-color="var(--pri-q3)">
+                <span class="custom-select__dot"></span>
+                <span>Q3 緊急·不重要</span>
+              </div>
+              <div class="custom-select__option" data-value="q4" data-color="var(--pri-q4)">
+                <span class="custom-select__dot"></span>
+                <span>Q4 不重要·不緊急</span>
+              </div>
+            </div>
+          </div>
+          <select class="form-select" id="taskPriority" style="position:absolute;opacity:0;pointer-events:none;height:0;">
+            <option value="q2">🟢 Q2 重要·不緊急</option>
             <option value="q1">🔴 Q1 重要·緊急</option>
-            <option value="q3">🟠 Q3 緊急·不重要</option>
-            <option value="q4">⚪ Q4 不重要·不緊急</option>
+            <option value="q3">🟡 Q3 緊急·不重要</option>
+            <option value="q4">🔵 Q4 不重要·不緊急</option>
           </select>
         </div>
         <div class="form-group">
@@ -1822,6 +1871,59 @@ function renderCategoryChart(catCounts) {
       }
     }
   });
+}
+
+// ============================================================
+// CUSTOM PRIORITY SELECT
+// ============================================================
+function initPrioritySelect() {
+  const sel = document.getElementById('prioritySelect');
+  if (!sel) return;
+  const hidden = document.getElementById(sel.dataset.target);
+  const trigger = sel.querySelector('.custom-select__trigger');
+  const textEl = sel.querySelector('.custom-select__text');
+  const dotEl = sel.querySelector('.custom-select__dot');
+  const options = sel.querySelectorAll('.custom-select__option');
+
+  function setValue(v, label) {
+    hidden.value = v;
+    textEl.textContent = label;
+    options.forEach(opt => {
+      opt.classList.toggle('selected', opt.dataset.value === v);
+    });
+    const map = { q1: '--pri-q1', q2: '--pri-q2', q3: '--pri-q3', q4: '--pri-q4' };
+    dotEl.setAttribute('data-v', v);
+    dotEl.style.background = `var(${map[v]})`;
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sel.classList.toggle('open');
+  });
+
+  options.forEach(opt => {
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setValue(opt.dataset.value, opt.querySelector('span:last-child').textContent);
+      sel.classList.remove('open');
+    });
+  });
+
+  document.addEventListener('click', () => sel.classList.remove('open'));
+}
+
+// Sync custom select when opening new/edit modal
+function syncPrioritySelect() {
+  const sel = document.getElementById('prioritySelect');
+  if (!sel) return;
+  const hidden = document.getElementById('taskPriority');
+  const label = { q1: 'Q1 重要·緊急', q2: 'Q2 重要·不緊急', q3: 'Q3 緊急·不重要', q4: 'Q4 不重要·不緊急' };
+  const dot = sel.querySelector('.custom-select__dot');
+  const text = sel.querySelector('.custom-select__text');
+  const map = { q1: '--pri-q1', q2: '--pri-q2', q3: '--pri-q3', q4: '--pri-q4' };
+  dot.setAttribute('data-v', hidden.value);
+  dot.style.background = `var(${map[hidden.value]})`;
+  text.textContent = label[hidden.value];
 }
 
 // ============================================================
