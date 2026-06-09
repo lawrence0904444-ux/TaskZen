@@ -25,13 +25,16 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Fetch — 網路優先，後備快取
+// Fetch — 網路優先，後備快取（僅快取 GET）
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {
         const clone = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(e.request, clone));
+        caches.open(CACHE).then((cache) => {
+          try { cache.put(e.request, clone); } catch (_) { /* ignore non-cacheable */ }
+        });
         return res;
       })
       .catch(() => caches.match(e.request))
