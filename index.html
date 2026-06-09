@@ -1160,6 +1160,14 @@ function broadcastChange() {
 // ============================================================
 // CROSS-DEVICE SYNC (PeerJS / WebRTC)
 // ============================================================
+let peerReconnectTimer = null;
+
+function clearPeer() {
+  clearTimeout(peerReconnectTimer);
+  if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
+  peerConnections = [];
+}
+
 function setSyncStatus(s) {
   const el = document.getElementById('syncStatus');
   if (!el) return;
@@ -1192,6 +1200,23 @@ function onPeerData(data) {
   }
 }
 
+function setupPeerConnection(conn) {
+  conn.on('data', onPeerData);
+  conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
+  conn.on('close', () => {
+    peerConnections = peerConnections.filter(c => c !== conn);
+    setSyncStatus(peerConnections.length ? 'peers' : 'ok');
+  });
+}
+
+function schedulePeerReconnect() {
+  clearTimeout(peerReconnectTimer);
+  peerReconnectTimer = setTimeout(() => {
+    clearPeer();
+    initPeerSync();
+  }, 5000);
+}
+
 function initPeerSync() {
   if (typeof Peer === 'undefined') { setSyncStatus('error'); return; }
 
@@ -1201,37 +1226,37 @@ function initPeerSync() {
     peer.on('open', () => {
       setSyncStatus('ok');
       // Host mode — accept incoming connections
-      peer.on('connection', (conn) => {
-        conn.on('data', onPeerData);
-        conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
-        conn.on('close', () => { peerConnections = peerConnections.filter(c => c !== conn); setSyncStatus(peerConnections.length ? 'peers' : 'ok'); });
-      });
+      peer.on('connection', (conn) => setupPeerConnection(conn));
     });
 
-    peer.on('connection', (conn) => {
-      conn.on('data', onPeerData);
-      conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
-      conn.on('close', () => { peerConnections = peerConnections.filter(c => c !== conn); setSyncStatus(peerConnections.length ? 'peers' : 'ok'); });
-    });
+    peer.on('connection', (conn) => setupPeerConnection(conn));
 
     peer.on('error', (err) => {
       if (err.type === 'unavailable-id') {
         // Room exists — join as guest
-        peer.destroy();
+        clearPeer();
         peer = new Peer();
         peer.on('open', () => {
           const conn = peer.connect(PEER_ROOM);
-          conn.on('data', onPeerData);
-          conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
-          conn.on('close', () => { peerConnections = peerConnections.filter(c => c !== conn); setSyncStatus('error'); });
+          if (conn) setupPeerConnection(conn);
+          else { setSyncStatus('error'); schedulePeerReconnect(); }
         });
-        peer.on('error', () => setSyncStatus('error'));
-      } else if (err.type !== 'disconnected') {
+        peer.on('error', () => { setSyncStatus('error'); schedulePeerReconnect(); });
+      } else if (err.type === 'disconnected') {
+        schedulePeerReconnect();
+      } else {
         setSyncStatus('error');
+        schedulePeerReconnect();
       }
     });
+
+    peer.on('disconnected', () => schedulePeerReconnect());
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', clearPeer);
   } catch (e) {
     setSyncStatus('error');
+    schedulePeerReconnect();
   }
 }
 
