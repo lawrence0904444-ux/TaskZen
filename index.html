@@ -15,7 +15,7 @@
 <!-- SortableJS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
 <!-- Supabase -->
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2" defer></script>
 <style>
 /* ============================================================
    DESIGN TOKENS — 禪意美學設計系統
@@ -1895,9 +1895,9 @@ function init() {
   setInterval(resetDailyTasks, 60000);
 }
 
-// Wait for Chart.js and Sortable to load
+// Wait for Chart.js, Sortable, and Supabase to load
 let loadCheck = setInterval(() => {
-  if (typeof Sortable !== 'undefined' && typeof Chart !== 'undefined') {
+  if (typeof Sortable !== 'undefined' && typeof Chart !== 'undefined' && typeof window.supabase !== 'undefined') {
     clearInterval(loadCheck);
     init();
   }
@@ -1905,7 +1905,7 @@ let loadCheck = setInterval(() => {
 
 // Fallback timeout
 setTimeout(() => {
-  if (typeof Sortable === 'undefined' || typeof Chart === 'undefined') {
+  if (typeof Sortable === 'undefined' || typeof Chart === 'undefined' || typeof window.supabase === 'undefined') {
     console.warn('CDN dependencies not loaded, initializing with degraded functionality');
     init();
   }
