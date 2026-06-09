@@ -500,6 +500,9 @@ ul { list-style: none; }
   transition: transform var(--duration-normal) var(--ease-out);
 }
 .modal-overlay.open .modal { transform: scale(1) translateY(0); }
+.modal-overlay .custom-select { overflow: visible !important; }
+.modal { overflow: visible !important; }
+.modal-body { overflow: visible !important; }
 .modal-header {
   padding: var(--space-lg) var(--space-xl);
   border-bottom: 1px solid var(--border-light);
@@ -548,37 +551,40 @@ ul { list-style: none; }
   background: var(--bg-card);
   font-size: 0.875rem;
   transition: all var(--duration-fast) ease;
+font-weight: 600;
+text-transform: uppercase;
+letter-spacing: 0.05em;
+color: var(--text-secondary);
+margin-bottom: var(--space-xs);
 }
-.form-input:focus, .form-textarea:focus, .form-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-light);
-}
-.form-textarea { resize: vertical; min-height: 80px; }
 
 /* Custom priority select */
-.custom-select { position: relative; }
+.custom-select { position: relative; overflow: visible !important; }
 .custom-select__trigger {
-  width: 100%; padding: 10px 14px; border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm); background: var(--bg-card);
-  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-  user-select: none;
+width: 100%; padding: 10px 14px; border: 1px solid var(--border-light);
+border-radius: var(--radius-sm); background: var(--bg-card);
+display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+user-select: none;
 }
 .custom-select__dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .custom-select__text { flex: 1; font-size: 0.875rem; color: var(--text-primary); }
 .custom-select__arrow { color: var(--text-secondary); font-size: 0.75rem; }
 .custom-select__options {
-  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20;
-  background: var(--bg-card); border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm); overflow: hidden; display: none;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+background: var(--bg-card); border: 1px solid var(--border-light);
+border-radius: var(--radius-sm); overflow: hidden; display: none;
+box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
 .custom-select.open .custom-select__options { display: block; }
 .custom-select__option {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 14px; cursor: pointer; font-size: 0.875rem;
+display: inline-flex; align-items: center; gap: 8px;
+padding: 10px 14px; cursor: pointer; font-size: 0.875rem;
 }
 .custom-select__option:hover { background: rgba(0,0,0,0.03); }
+.custom-select__option[data-value="q1"] { background: rgba(244,166,160,0.12); }
+.custom-select__option[data-value="q2"] { background: rgba(143,174,139,0.12); }
+.custom-select__option[data-value="q3"] { background: rgba(226,176,106,0.12); }
+.custom-select__option[data-value="q4"] { background: rgba(140,155,165,0.12); }
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2003,6 +2009,8 @@ function init() {
 
   // Start cross-device sync (Supabase Realtime)
   startSupabaseSync();
+
+  initPrioritySelect();
 
   // Re-check daily tasks when tab becomes visible (user might cross midnight)
   document.addEventListener('visibilitychange', () => {
