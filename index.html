@@ -207,6 +207,20 @@ ul { list-style: none; }
 .header-title { font-size: 1rem; font-weight: 500; color: var(--text-primary); }
 .header-title span { font-weight: 300; color: var(--text-secondary); }
 .header-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-sm); }
+.sync-indicator {
+  font-size: 0.8rem;
+  width: 24px;
+  text-align: center;
+  transition: opacity 0.3s;
+  cursor: default;
+}
+.sync-indicator.syncing { animation: syncPulse 1s ease-in-out infinite; }
+.sync-indicator.ok { color: var(--text-secondary); }
+.sync-indicator.error { color: var(--pri-q1); }
+@keyframes syncPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
 .header-search {
   display: flex;
   align-items: center;
@@ -951,6 +965,7 @@ ul { list-style: none; }
         <input type="text" id="searchInput" placeholder="搜尋任務..." oninput="onSearch(event)">
       </div>
       <div class="header-actions">
+        <span id="syncStatus" class="sync-indicator" title="同步狀態">⋯</span>
         <button class="btn btn-secondary btn-sm" onclick="switchView('analytics')">📊 分析</button>
         <button class="btn btn-primary" onclick="openNewTask()">＋ 新任務</button>
       </div>
@@ -1050,12 +1065,19 @@ ul { list-style: none; }
 // STATE
 // ============================================================
 const STORAGE_KEY = 'taskzen_state';
+// Cross-device sync
+const SYNC_INTERVAL = 3000; // poll every 3s
+const SYNC_ROOM = 'default';
+const SYNC_URL = '/.netlify/functions/sync';
+let syncTimer = null;
+let lastPushedUpdated = 0;
 
 const DEFAULT_STATE = {
   tasks: [],
   nextId: 1,
   filter: 'all',
   search: '',
+  lastUpdated: 0,
 };
 
 // Seed data
@@ -1097,7 +1119,8 @@ function loadState() {
   // First run — use seed data
   const s = JSON.parse(JSON.stringify(DEFAULT_STATE));
   s.tasks = SEED_TASKS.map(t => ({ ...t }));
-  s.nextId = 7;
+  s.nextId = 9;
+  s.lastUpdated = Date.now();
   return s;
 }
 
@@ -1132,6 +1155,85 @@ function broadcastChange() {
   if (bc) {
     try { bc.postMessage({ type: 'state_updated', session: SESSION_ID, timestamp: Date.now() }); } catch (e) { /* ignore */ }
   }
+}
+
+// ============================================================
+// CROSS-DEVICE SYNC (Netlify Function + Blob)
+// ============================================================
+function setSyncStatus(stateStr) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.className = 'sync-indicator';
+  if (stateStr === 'syncing') { el.textContent = '⟳'; el.classList.add('syncing'); }
+  else if (stateStr === 'ok') { el.textContent = '✓'; el.classList.add('ok'); }
+  else if (stateStr === 'error') { el.textContent = '⚠'; el.classList.add('error'); }
+  else { el.textContent = '○'; }
+}
+
+function pushToServer() {
+  if (state.lastUpdated <= lastPushedUpdated) return Promise.resolve(false);
+  setSyncStatus('syncing');
+  return fetch(SYNC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      room: SYNC_ROOM,
+      tasks: state.tasks,
+      nextId: state.nextId,
+      lastUpdated: state.lastUpdated,
+    }),
+  })
+  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  .then(() => {
+    lastPushedUpdated = state.lastUpdated;
+    setSyncStatus('ok');
+    return true;
+  })
+  .catch(err => {
+    console.warn('Sync push failed:', err);
+    setSyncStatus('error');
+    return false;
+  });
+}
+
+function pullFromServer() {
+  setSyncStatus('syncing');
+  return fetch(SYNC_URL + '?room=' + encodeURIComponent(SYNC_ROOM))
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+      if (data && data.tasks && data.lastUpdated > state.lastUpdated) {
+        state.tasks = data.tasks;
+        state.nextId = data.nextId || state.nextId;
+        // Keep local filter/search/view preferences
+        state.lastUpdated = data.lastUpdated;
+        lastPushedUpdated = data.lastUpdated;
+        renderAll();
+        showToast('🔄 已同步其他裝置的更新', 'success');
+      }
+      setSyncStatus('ok');
+      return true;
+    })
+    .catch(err => {
+      console.warn('Sync pull failed:', err);
+      setSyncStatus('error');
+      return false;
+    });
+}
+
+// Debounced push — avoid flooding on rapid changes
+let pushDebounceTimer = null;
+function schedulePush() {
+  clearTimeout(pushDebounceTimer);
+  pushDebounceTimer = setTimeout(pushToServer, 800);
+}
+
+function startCrossDeviceSync() {
+  pullFromServer(); // initial fetch
+  syncTimer = setInterval(pullFromServer, SYNC_INTERVAL);
+}
+
+function stopCrossDeviceSync() {
+  if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
 }
 
 // ============================================================
@@ -1203,6 +1305,7 @@ function renderAll() {
   renderSidebarCounts();
   renderAnalytics();
   saveState();
+  schedulePush();
 }
 
 function renderBoard() {
@@ -1340,6 +1443,7 @@ function initSortable() {
           t.order[toStatus] = i;
         });
 
+        state.lastUpdated = Date.now();
         renderAll();
         showToast(`✅ 任務已移至「${statusLabel(toStatus)}」`);
       }
@@ -1494,6 +1598,7 @@ function saveTask() {
     showToast('✨ 新任務已建立');
   }
 
+  state.lastUpdated = Date.now();
   closeModal();
   renderAll();
 }
@@ -1501,6 +1606,7 @@ function saveTask() {
 function deleteTask(id) {
   if (!confirm('確定要刪除這個任務嗎？')) return;
   state.tasks = state.tasks.filter(t => t.id !== id);
+  state.lastUpdated = Date.now();
   renderAll();
   showToast('🗑️ 任務已刪除');
 }
@@ -1727,6 +1833,7 @@ function resetDailyTasks() {
     }
   });
   if (resetCount > 0) {
+    state.lastUpdated = Date.now();
     renderAll();
     showToast(`🔄 ${resetCount} 個每日任務已自動重置`, 'success');
   }
@@ -1741,6 +1848,9 @@ function init() {
   renderAll();
   // Highlight current filter
   document.querySelector(`.nav-item[data-filter="${state.filter || 'all'}"]`)?.classList.add('active');
+
+  // Start cross-device sync (poll server every 3s)
+  startCrossDeviceSync();
 
   // Re-check daily tasks when tab becomes visible (user might cross midnight)
   document.addEventListener('visibilitychange', () => {
