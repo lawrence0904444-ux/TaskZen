@@ -21,27 +21,24 @@
    DESIGN TOKENS — 禪意美學設計系統
    ============================================================ */
 :root {
-  /* 紙本色系 */
-  --bg-page: #F7F5F2;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #FCFBF9;
-  --bg-column: #F0EDE8;
-  --bg-sidebar: #2D2A24;
-  --bg-header: rgba(247, 245, 242, 0.85);
+  --bg-page: #0F1115;
+  --bg-card: #1A1D23;
+  --bg-card-hover: #1F222A;
+  --bg-column: #141720;
+  --bg-sidebar: #08090C;
+  --bg-header: rgba(15, 17, 21, 0.88);
 
-  /* 文字 */
-  --text-primary: #2D2A24;
-  --text-secondary: #8B8580;
-  --text-tertiary: #B0A9A2;
-  --text-on-dark: #E8E3DE;
-  --text-muted: #C5BEB6;
+  --text-primary: #F7F5F2;
+  --text-secondary: #B8B5AF;
+  --text-tertiary: #6B6862;
+  --text-on-dark: #F7F5F2;
+  --text-muted: #8C877F;
 
-  /* 邊框與陰影 */
-  --border-light: #E8E3DE;
+  --border-light: #2A2D34;
   --border-focus: #C4A882;
-  --shadow-sm: 0 1px 3px rgba(45, 42, 36, 0.06);
-  --shadow-md: 0 4px 12px rgba(45, 42, 36, 0.08);
-  --shadow-lg: 0 12px 40px rgba(45, 42, 36, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md: 0 6px 18px rgba(0,0,0,0.45);
+  --shadow-lg: 0 18px 45px rgba(0,0,0,0.55);
 
   /* 佇列色彩 */
   --color-todo: #8B8580;
@@ -91,6 +88,7 @@
   /* 佈局 */
   --sidebar-w: 240px;
   --header-h: 64px;
+}
 }
 
 /* ============================================================
@@ -551,17 +549,15 @@ ul { list-style: none; }
   background: var(--bg-card);
   font-size: 0.875rem;
   transition: all var(--duration-fast) ease;
-font-weight: 600;
-text-transform: uppercase;
-letter-spacing: 0.05em;
-color: var(--text-secondary);
-margin-bottom: var(--space-xs);
 }
 
-/* Custom priority select */
-.custom-select { position: relative; overflow: visible !important; }
-.custom-select__trigger {
-width: 100%; padding: 10px 14px; border: 1px solid var(--border-light);
+.zenDark:root {
+  --zen-dark-bg: #121214;
+  --zen-dark-surface: #1c1c1f;
+  --zen-dark-border: #2a2a2e;
+  --zen-dark-text: #e6e6e6;
+  --zen-dark-muted: #9a9aa0;
+}
 border-radius: var(--radius-sm); background: var(--bg-card);
 display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
 user-select: none;
