@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskZen — 極簡任務管理</title>
+<meta name="description" content="具有禪意美學的極簡任務管理工具">
+<meta name="theme-color" content="#F7F5F2">
+<link rel="manifest" href="manifest.json">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<!-- SortableJS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
+<style>
+/* ============================================================
+   DESIGN TOKENS — 禪意美學設計系統
+   ============================================================ */
+:root {
+  /* 紙本色系 */
+  --bg-page: #F7F5F2;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FCFBF9;
+  --bg-column: #F0EDE8;
+  --bg-sidebar: #2D2A24;
+  --bg-header: rgba(247, 245, 242, 0.85);
+
+  /* 文字 */
+  --text-primary: #2D2A24;
+  --text-secondary: #8B8580;
+  --text-tertiary: #B0A9A2;
+  --text-on-dark: #E8E3DE;
+  --text-muted: #C5BEB6;
+
+  /* 邊框與陰影 */
+  --border-light: #E8E3DE;
+  --border-focus: #C4A882;
+  --shadow-sm: 0 1px 3px rgba(45, 42, 36, 0.06);
+  --shadow-md: 0 4px 12px rgba(45, 42, 36, 0.08);
+  --shadow-lg: 0 12px 40px rgba(45, 42, 36, 0.12);
+
+  /* 佇列色彩 */
+  --color-todo: #8B8580;
+  --color-in-progress: #7A9EB1;
+  --color-done: #8FAD8A;
+
+  /* 優先級色彩 */
+  --pri-q1: #D4726A;
+  --pri-q2: #7A9EB1;
+  --pri-q3: #E8A87C;
+  --pri-q4: #B0A9A2;
+
+  /* 強調 */
+  --accent: #C4A882;
+  --accent-hover: #B89C75;
+  --accent-light: rgba(196, 168, 130, 0.12);
+
+  /* 狀態 */
+  --error: #D4726A;
+  --success: #8FAD8A;
+
+  /* 間距 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* 圓角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* 字型 */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-tc: 'Noto Sans TC', 'Inter', -apple-system, sans-serif;
+
+  /* 轉場 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast: 200ms;
+  --duration-normal: 350ms;
+  --duration-slow: 500ms;
+
+  /* 佈局 */
+  --sidebar-w: 240px;
+  --header-h: 64px;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow: hidden;
+  height: 100vh;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; font-size: inherit; }
+input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; }
+ul { list-style: none; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+#app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-sidebar);
+  color: var(--text-on-dark);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform var(--duration-normal) var(--ease-out);
+  z-index: 30;
+}
+.sidebar-brand {
+  padding: var(--space-lg) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sidebar-brand span { font-weight: 300; color: var(--accent); }
+.sidebar-nav { flex: 1; padding: var(--space-md) 0; overflow-y: auto; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  margin: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  transition: all var(--duration-fast) ease;
+  cursor: pointer;
+}
+.nav-item:hover { color: var(--text-on-dark); background: rgba(255,255,255,0.06); }
+.nav-item.active { color: var(--accent); background: var(--accent-light); font-weight: 500; }
+.nav-item .icon { font-size: 1.125rem; width: 24px; text-align: center; flex-shrink: 0; }
+.nav-item .badge {
+  margin-left: auto;
+  background: rgba(255,255,255,0.08);
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+.nav-item.active .badge { background: var(--accent-light); color: var(--accent); }
+
+.sidebar-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Main area */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Header */
+.header {
+  height: var(--header-h);
+  padding: 0 var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  background: var(--bg-header);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.header-title { font-size: 1rem; font-weight: 500; color: var(--text-primary); }
+.header-title span { font-weight: 300; color: var(--text-secondary); }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-sm); }
+.header-search {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  gap: 8px;
+  width: 220px;
+  transition: all var(--duration-fast) ease;
+}
+.header-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); width: 280px; }
+.header-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  width: 100%;
+  color: var(--text-primary);
+}
+.header-search input::placeholder { color: var(--text-tertiary); }
+.header-search .icon { color: var(--text-tertiary); font-size: 0.875rem; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: all var(--duration-fast) ease;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--bg-card); border: 1px solid var(--border-light); color: var(--text-primary); }
+.btn-secondary:hover { background: var(--bg-card-hover); border-color: var(--text-tertiary); }
+.btn-ghost { color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--accent-light); color: var(--text-primary); }
+.btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+.btn-icon { padding: 6px; width: 34px; height: 34px; }
+
+/* ============================================================
+   CONTENT AREA (switching between board & analytics)
+   ============================================================ */
+.content-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.view-pane {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: var(--space-lg) var(--space-xl);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+}
+.view-pane.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ============================================================
+   KANBAN BOARD
+   ============================================================ */
+.board-columns {
+  display: flex;
+  gap: var(--space-lg);
+  height: 100%;
+  min-height: 0;
+  padding-bottom: var(--space-md);
+}
+.board-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-column);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.col-header {
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+.col-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.col-dot.todo { background: var(--color-todo); }
+.col-dot.in-progress { background: var(--color-in-progress); }
+.col-dot.done { background: var(--color-done); }
+
+.col-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.col-count {
+  margin-left: auto;
+  background: var(--bg-card);
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.col-cards {
+  flex: 1;
+  padding: 0 var(--space-sm) var(--space-sm);
+  overflow-y: auto;
+  min-height: 60px;
+}
+.col-cards.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.col-empty-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  padding: var(--space-lg);
+  text-align: center;
+  font-style: italic;
+}
+
+/* Task Card */
+.task-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  transition: all var(--duration-fast) var(--ease-out);
+  position: relative;
+  border: 1px solid transparent;
+}
+.task-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-light);
+}
+.task-card:active { cursor: grabbing; }
+.task-card.dragging { opacity: 0.5; transform: rotate(2deg); }
+.task-card .card-priority {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 3px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.card-priority.q1 { background: var(--pri-q1); }
+.card-priority.q2 { background: var(--pri-q2); }
+.card-priority.q3 { background: var(--pri-q3); }
+.card-priority.q4 { background: var(--pri-q4); }
+
+.task-card .card-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  padding-top: 2px;
+}
+.task-card .card-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: var(--space-sm);
+}
+.task-card .card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+}
+.card-meta .card-tag {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--accent-light);
+  color: var(--accent-hover);
+  font-weight: 500;
+  font-size: 0.65rem;
+}
+.card-meta .card-assignee {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.card-meta .card-date {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.task-card .card-actions {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease;
+}
+.task-card:hover .card-actions { opacity: 1; }
+.card-actions button {
+  width: 26px; height: 26px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  transition: all var(--duration-fast) ease;
+}
+.card-actions button:hover { background: var(--accent-light); color: var(--text-primary); }
+.card-actions .btn-del:hover { color: var(--error); background: rgba(212, 114, 106, 0.1); }
+
+/* Sortable ghost */
+.task-card.sortable-ghost {
+  opacity: 0.3;
+  border: 2px dashed var(--accent);
+  background: var(--accent-light);
+}
+.task-card.sortable-chosen {
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.02);
+}
+
+/* ============================================================
+   TASK MODAL
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(45, 42, 36, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: 520px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  transform: scale(0.95) translateY(10px);
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+.modal-overlay.open .modal { transform: scale(1) translateY(0); }
+.modal-header {
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h2 { font-size: 1.125rem; font-weight: 500; }
+.modal-header h2 span { font-weight: 300; color: var(--text-secondary); }
+.modal-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: var(--text-tertiary);
+  transition: all var(--duration-fast) ease;
+}
+.modal-close:hover { background: var(--bg-column); color: var(--text-primary); }
+.modal-body { padding: var(--space-xl); }
+.modal-footer {
+  padding: var(--space-md) var(--space-xl);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+/* Form fields */
+.form-group { margin-bottom: var(--space-lg); }
+.form-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xs);
+}
+.form-input, .form-textarea, .form-select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  font-size: 0.875rem;
+  transition: all var(--duration-fast) ease;
+}
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+/* Category tag input */
+.category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-sm);
+}
+.cat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+  border: 1px solid transparent;
+}
+.cat-tag.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.cat-tag .cat-remove {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  opacity: 0.6;
+}
+.cat-tag .cat-remove:hover { opacity: 1; }
+
+/* ============================================================
+   ANALYTICS DASHBOARD
+   ============================================================ */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+.stat-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--border-light);
+  transition: box-shadow var(--duration-fast) ease;
+}
+.stat-card:hover { box-shadow: var(--shadow-sm); }
+.stat-card .stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-xs);
+}
+.stat-card .stat-value {
+  font-size: 1.75rem;
+  font-weight: 300;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.stat-card .stat-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.stat-card .stat-icon {
+  float: right;
+  font-size: 1.5rem;
+  opacity: 0.3;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+.chart-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--border-light);
+}
+.chart-card h3 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+}
+.chart-wrapper { position: relative; max-height: 220px; }
+
+.metrics-table {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+}
+.metrics-table table { width: 100%; border-collapse: collapse; }
+.metrics-table th {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  background: var(--bg-column);
+  border-bottom: 1px solid var(--border-light);
+}
+.metrics-table td {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.metrics-table tr:last-child td { border-bottom: none; }
+.metrics-table tr:hover td { background: var(--bg-card-hover); }
+
+.pri-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+.pri-badge.q1 { background: rgba(212, 114, 106, 0.12); color: var(--pri-q1); }
+.pri-badge.q2 { background: rgba(122, 158, 177, 0.15); color: var(--pri-q2); }
+.pri-badge.q3 { background: rgba(232, 168, 124, 0.15); color: var(--pri-q3); }
+.pri-badge.q4 { background: rgba(176, 169, 162, 0.15); color: var(--pri-q4); }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 1024px) {
+  .board-columns { overflow-x: auto; }
+  .board-col { min-width: 280px; }
+  .analytics-grid { grid-template-columns: repeat(2, 1fr); }
+  .charts-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    transform: translateX(-100%);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay {
+    position: fixed; inset: 0;
+    background: rgba(45,42,36,0.3);
+    z-index: 25;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-normal) ease;
+  }
+  .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+  .header { padding: 0 var(--space-md); }
+  .header-search { width: 140px; }
+  .header-search:focus-within { width: 180px; }
+  .view-pane { padding: var(--space-md); }
+  .board-columns { flex-direction: column; gap: var(--space-md); }
+  .board-col { min-width: 0; max-height: 300px; }
+  .analytics-grid { grid-template-columns: 1fr 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .menu-toggle { display: flex !important; }
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.task-card { animation: fadeInUp var(--duration-normal) var(--ease-out); }
+.loading-pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+/* Mobile menu toggle */
+.menu-toggle { display: none; }
+
+/* ============================================================
+   MISC HELPERS
+   ============================================================ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl) var(--space-lg);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.empty-state .icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.4; }
+.empty-state h3 { font-size: 1rem; font-weight: 500; color: var(--text-secondary); margin-bottom: var(--space-xs); }
+.empty-state p { font-size: 0.8125rem; }
+
+.toast-container {
+  position: fixed;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.toast {
+  background: var(--bg-sidebar);
+  color: var(--text-on-dark);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  box-shadow: var(--shadow-lg);
+  animation: fadeInUp var(--duration-normal) var(--ease-out);
+  max-width: 320px;
+}
+.toast.error { background: var(--error); }
+.toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Sidebar Overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span>✦</span> Task<span>Zen</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-view="board" onclick="switchView('board')">
+        <span class="icon">◐</span> 看板
+        <span class="badge" id="navBoardCount">0</span>
+      </div>
+      <div class="nav-item" data-view="analytics" onclick="switchView('analytics')">
+        <span class="icon">◎</span> 分析
+        <span class="badge" id="navAnalyticsBadge">洞察</span>
+      </div>
+      <div style="margin-top:var(--space-lg);padding:0 var(--space-lg);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-tertiary);opacity:0.5;">快速篩選</div>
+      <div class="nav-item" data-filter="all" onclick="setFilter('all')">
+        <span class="icon">⊡</span> 全部任務
+        <span class="badge" id="filterAllCount">0</span>
+      </div>
+      <div class="nav-item" data-filter="q1" onclick="setFilter('q1')">
+        <span class="icon">⊙</span> Q1 重要·緊急
+        <span class="badge" id="filterQ1Count">0</span>
+      </div>
+      <div class="nav-item" data-filter="today" onclick="setFilter('today')">
+        <span class="icon">◷</span> 今日到期
+        <span class="badge" id="filterTodayCount">0</span>
+      </div>
+      <div class="nav-item" data-filter="assigned" onclick="setFilter('assigned')">
+        <span class="icon">◉</span> 指派給我
+        <span class="badge" id="filterAssignedCount">0</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <span>✦</span> TaskZen · 禪意任務管理
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-area">
+    <!-- Header -->
+    <header class="header">
+      <button class="btn btn-ghost btn-icon menu-toggle" onclick="toggleSidebar()" aria-label="選單">☰</button>
+      <div class="header-title"><span id="viewTitle">看板</span></div>
+      <div class="header-search">
+        <span class="icon">⌕</span>
+        <input type="text" id="searchInput" placeholder="搜尋任務..." oninput="onSearch(event)">
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="switchView('analytics')">📊 分析</button>
+        <button class="btn btn-primary" onclick="openNewTask()">＋ 新任務</button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content-area">
+      <!-- Board View -->
+      <div class="view-pane active" id="viewBoard">
+        <div class="board-columns" id="boardColumns">
+          <!-- Columns rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Analytics View -->
+      <div class="view-pane" id="viewAnalytics">
+        <div id="analyticsContent">
+          <div class="empty-state">
+            <div class="icon loading-pulse">◎</div>
+            <h3>載入中...</h3>
+            <p>正在準備分析數據</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2><span id="modalTitle">✦</span> <span id="modalAction">新增任務</span></h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="taskTitle">任務名稱</label>
+        <input class="form-input" id="taskTitle" placeholder="輸入任務名稱..." autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="taskDesc">描述</label>
+        <textarea class="form-textarea" id="taskDesc" placeholder="新增描述（選填）"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="taskPriority">優先級</label>
+          <select class="form-select" id="taskPriority">
+            <option value="q2">Q2 重要·不緊急</option>
+            <option value="q1">🔴 Q1 重要·緊急</option>
+            <option value="q3">🟠 Q3 緊急·不重要</option>
+            <option value="q4">⚪ Q4 不重要·不緊急</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="taskCategory">分類</label>
+          <select class="form-select" id="taskCategory">
+            <option value="general">一般</option>
+            <option value="development">開發</option>
+            <option value="design">設計</option>
+            <option value="research">研究</option>
+            <option value="meeting">會議</option>
+            <option value="personal">個人</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="taskAssignee">負責人</label>
+          <input class="form-input" id="taskAssignee" placeholder="指派給...">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="taskDue">截止日期</label>
+          <input class="form-input" type="date" id="taskDue">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="modalSaveBtn" onclick="saveTask()">建立任務</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const STORAGE_KEY = 'taskzen_state';
+
+const DEFAULT_STATE = {
+  tasks: [],
+  nextId: 1,
+  filter: 'all',
+  search: '',
+};
+
+// Seed data
+const SEED_TASKS = [
+  { id: 1, title: '規劃專案架構', desc: '定義系統架構與技術選型', priority: 'q2', category: 'development', status: 'done', assignee: 'Alex', dueDate: '', order: { todo: 0, 'in-progress': 0, done: 0 }, createdAt: Date.now() - 86400000 * 3, updatedAt: Date.now() - 86400000 * 2 },
+  { id: 2, title: '設計 UI 原型', desc: 'Figma 製作低保真原型', priority: 'q2', category: 'design', status: 'in-progress', assignee: 'Lisa', dueDate: new Date(Date.now() + 86400000 * 2).toISOString().slice(0,10), order: { todo: 0, 'in-progress': 0, done: 1 }, createdAt: Date.now() - 86400000 * 2, updatedAt: Date.now() - 86400000 },
+  { id: 3, title: '研究競品分析', desc: '分析市面上相似產品的優缺點', priority: 'q4', category: 'research', status: 'todo', assignee: '', dueDate: '', order: { todo: 0, 'in-progress': 0, done: 2 }, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },
+  { id: 4, title: '修復登入頁面 Bug', desc: '使用者回報在 Safari 上無法登入', priority: 'q1', category: 'development', status: 'todo', assignee: 'Alex', dueDate: new Date(Date.now() + 86400000).toISOString().slice(0,10), order: { todo: 1, 'in-progress': 0, done: 3 }, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: 5, title: '團隊同步會議', desc: '每週 sprint planning', priority: 'q3', category: 'meeting', status: 'todo', assignee: '', dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0,10), order: { todo: 2, 'in-progress': 0, done: 4 }, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: 6, title: '閱讀《簡潔的架構》', desc: 'Chapter 5-7', priority: 'q4', category: 'personal', status: 'in-progress', assignee: '', dueDate: '', order: { todo: 3, 'in-progress': 1, done: 5 }, createdAt: Date.now(), updatedAt: Date.now() },
+];
+
+let state = loadState();
+let editingTaskId = null;
+
+// Charts instances
+let chartPie = null;
+let chartBar = null;
+
+// BroadcastChannel for real-time sync
+let bc = null;
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.tasks && Array.isArray(parsed.tasks)) {
+        return parsed;
+      }
+    }
+  } catch (e) { /* ignore */ }
+  // First run — use seed data
+  const s = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  s.tasks = SEED_TASKS.map(t => ({ ...t }));
+  s.nextId = 7;
+  return s;
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) { console.warn('Save failed', e); }
+  broadcastChange();
+}
+
+// ============================================================
+// REAL-TIME SYNC (BroadcastChannel)
+// ============================================================
+function initSync() {
+  try {
+    bc = new BroadcastChannel('taskzen_sync');
+    bc.onmessage = (e) => {
+      if (e.data && e.data.type === 'state_updated') {
+        const fresh = loadState();
+        if (fresh && fresh.tasks) {
+          state = fresh;
+          renderAll();
+          showToast('🔄 資料已同步', 'success');
+        }
+      }
+    };
+  } catch (e) { /* BroadcastChannel not supported */ }
+}
+function broadcastChange() {
+  if (bc) {
+    try { bc.postMessage({ type: 'state_updated', timestamp: Date.now() }); } catch (e) { /* ignore */ }
+  }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function genId() { return state.nextId++; }
+
+function tasksForStatus(status) {
+  return state.tasks
+    .filter(t => t.status === status)
+    .sort((a, b) => (a.order ? a.order[status] || 0 : 0) - (b.order ? b.order[status] || 0 : 0));
+}
+
+function filteredTasks() {
+  let list = [...state.tasks];
+  // Filter
+  const f = state.filter;
+  if (f === 'q1') list = list.filter(t => t.priority === 'q1');
+  else if (f === 'today') {
+    const today = new Date().toISOString().slice(0,10);
+    list = list.filter(t => t.dueDate === today);
+  }
+  else if (f === 'assigned') list = list.filter(t => t.assignee && t.assignee.trim());
+  // Search
+  const q = state.search.trim().toLowerCase();
+  if (q) {
+    list = list.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      (t.desc && t.desc.toLowerCase().includes(q)) ||
+      (t.assignee && t.assignee.toLowerCase().includes(q)) ||
+      (t.category && t.category.toLowerCase().includes(q))
+    );
+  }
+  return list;
+}
+
+function countByStatus(list, status) {
+  return list.filter(t => t.status === status).length;
+}
+
+const PRIORITY_LABELS = { q1: 'Q1 重要·緊急', q2: 'Q2 重要·不緊急', q3: 'Q3 緊急·不重要', q4: 'Q4 不重要·不緊急' };
+const CATEGORY_LABELS = {
+  general: '一般', development: '開發', design: '設計',
+  research: '研究', meeting: '會議', personal: '個人'
+};
+const CATEGORY_COLORS = {
+  general: '#B0A9A2', development: '#7A9EB1', design: '#E8A87C',
+  research: '#A8C4A0', meeting: '#C4A882', personal: '#D4A8B0'
+};
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg, type = '') {
+  const c = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; }, 2500);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderAll() {
+  renderBoard();
+  renderSidebarCounts();
+  renderAnalytics();
+  saveState();
+}
+
+function renderBoard() {
+  const cols = document.getElementById('boardColumns');
+  const allTasks = filteredTasks();
+  const statuses = [
+    { id: 'todo', label: '待辦', dot: 'todo', hint: '空的 — 新增一張卡片' },
+    { id: 'in-progress', label: '進行中', dot: 'in-progress', hint: '將任務拖至此處開始進行' },
+    { id: 'done', label: '已完成', dot: 'done', hint: '完成的任務會顯示在此' },
+  ];
+
+  let html = '';
+  for (const col of statuses) {
+    const tasks = allTasks.filter(t => t.status === col.id);
+    html += `
+      <div class="board-col" data-status="${col.id}">
+        <div class="col-header">
+          <span class="col-dot ${col.dot}"></span>
+          <span class="col-title">${col.label}</span>
+          <span class="col-count">${tasks.length}</span>
+        </div>
+        <div class="col-cards sortable-col" data-status="${col.id}" id="col-${col.id}">
+          ${tasks.length === 0 ? `<div class="col-empty-hint">${col.hint}</div>` : ''}
+          ${tasks.map(t => renderTaskCard(t)).join('')}
+        </div>
+      </div>`;
+  }
+  cols.innerHTML = html;
+
+  // Init sortable on each column
+  initSortable();
+}
+
+function renderTaskCard(task) {
+  const pClass = task.priority || 'q2';
+  const catLabel = CATEGORY_LABELS[task.category] || task.category || '一般';
+  const catColor = CATEGORY_COLORS[task.category] || '#B0A9A2';
+
+  let metaParts = [];
+  if (task.category) metaParts.push(`<span class="card-tag" style="background:${catColor}22;color:${catColor}">${catLabel}</span>`);
+  if (task.assignee) metaParts.push(`<span class="card-assignee">👤 ${task.assignee}</span>`);
+  if (task.dueDate) {
+    const d = new Date(task.dueDate);
+    const today = new Date().toISOString().slice(0,10);
+    const isOverdue = task.dueDate < today && task.status !== 'done';
+    metaParts.push(`<span class="card-date" style="${isOverdue ? 'color:var(--pri-q1)' : ''}">📅 ${d.toLocaleDateString('zh-TW', {month:'short', day:'numeric'})}</span>`);
+  }
+  const metaHtml = metaParts.length ? `<div class="card-meta">${metaParts.join('')}</div>` : '';
+  const descHtml = task.desc ? `<div class="card-desc">${escHtml(task.desc)}</div>` : '';
+
+  return `
+    <div class="task-card" data-id="${task.id}" draggable="false">
+      <div class="card-priority ${pClass}"></div>
+      <div class="card-actions">
+        <button onclick="event.stopPropagation();editTask(${task.id})" title="編輯">✎</button>
+        <button class="btn-del" onclick="event.stopPropagation();deleteTask(${task.id})" title="刪除">✕</button>
+      </div>
+      <div class="card-title">${escHtml(task.title)}</div>
+      ${descHtml}
+      ${metaHtml}
+    </div>`;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function renderSidebarCounts() {
+  const all = state.tasks;
+  document.getElementById('navBoardCount').textContent = all.length;
+  document.getElementById('filterAllCount').textContent = all.length;
+  document.getElementById('filterQ1Count').textContent = all.filter(t => t.priority === 'q1').length;
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('filterTodayCount').textContent = all.filter(t => t.dueDate === today).length;
+  document.getElementById('filterAssignedCount').textContent = all.filter(t => t.assignee && t.assignee.trim()).length;
+}
+
+// ============================================================
+// SORTABLE (Drag and Drop)
+// ============================================================
+function initSortable() {
+  document.querySelectorAll('.sortable-col').forEach(el => {
+    if (el._sortable) el._sortable.destroy();
+    el._sortable = new Sortable(el, {
+      group: 'tasks',
+      animation: 200,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'dragging',
+      onEnd: function(evt) {
+        const taskId = parseInt(evt.item.dataset.id, 10);
+        const fromStatus = evt.from.dataset.status;
+        const toStatus = evt.to.dataset.status;
+        const newOrder = Array.from(evt.to.children)
+          .filter(el => el.classList.contains('task-card'))
+          .map(el => parseInt(el.dataset.id, 10));
+
+        // Update task status and order
+        const task = state.tasks.find(t => t.id === taskId);
+        if (task) {
+          task.status = toStatus;
+          task.updatedAt = Date.now();
+        }
+
+        // Normalize: ensure order fields exist
+        for (const t of state.tasks) {
+          if (!t.order) t.order = {};
+          for (const s of ['todo', 'in-progress', 'done']) {
+            if (t.order[s] === undefined) t.order[s] = 0;
+          }
+        }
+
+        // Rebuild order for the target column
+        const colTasks = state.tasks.filter(t => t.status === toStatus);
+        colTasks.sort((a, b) => {
+          const ai = newOrder.indexOf(a.id);
+          const bi = newOrder.indexOf(b.id);
+          return ai - bi;
+        });
+        colTasks.forEach((t, i) => {
+          if (!t.order) t.order = {};
+          t.order[toStatus] = i;
+        });
+
+        renderAll();
+        showToast(`✅ 任務已移至「${statusLabel(toStatus)}」`);
+      }
+    });
+  });
+}
+
+function statusLabel(s) {
+  return { todo: '待辦', 'in-progress': '進行中', done: '已完成' }[s] || s;
+}
+
+// ============================================================
+// VIEW SWITCHING
+// ============================================================
+function switchView(view) {
+  document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-view]').forEach(el => el.classList.remove('active'));
+  document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active');
+  const navEl = document.querySelector(`.nav-item[data-view="${view}"]`);
+  if (navEl) navEl.classList.add('active');
+  document.getElementById('viewTitle').textContent = view === 'board' ? '看板' : '分析儀表板';
+  if (view === 'analytics') renderAnalytics();
+  if (window.innerWidth <= 768) closeSidebar();
+}
+
+function setFilter(filter) {
+  state.filter = filter;
+  document.querySelectorAll('.nav-item[data-filter]').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.nav-item[data-filter="${filter}"]`);
+  if (el) el.classList.add('active');
+  renderBoard();
+}
+
+function onSearch(e) {
+  state.search = e.target.value;
+  renderBoard();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ============================================================
+// TASK CRUD
+// ============================================================
+function openNewTask() {
+  editingTaskId = null;
+  document.getElementById('modalAction').textContent = '新增任務';
+  document.getElementById('modalSaveBtn').textContent = '建立任務';
+  document.getElementById('taskTitle').value = '';
+  document.getElementById('taskDesc').value = '';
+  document.getElementById('taskPriority').value = 'q2';
+  document.getElementById('taskCategory').value = 'general';
+  document.getElementById('taskAssignee').value = '';
+  document.getElementById('taskDue').value = '';
+  document.getElementById('taskTitle').focus();
+  document.getElementById('taskModal').classList.add('open');
+}
+
+function editTask(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
+  editingTaskId = id;
+  document.getElementById('modalAction').textContent = '編輯任務';
+  document.getElementById('modalSaveBtn').textContent = '更新任務';
+  document.getElementById('taskTitle').value = task.title;
+  document.getElementById('taskDesc').value = task.desc || '';
+  document.getElementById('taskPriority').value = task.priority || 'q2';
+  document.getElementById('taskCategory').value = task.category || 'general';
+  document.getElementById('taskAssignee').value = task.assignee || '';
+  document.getElementById('taskDue').value = task.dueDate || '';
+  document.getElementById('taskModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('taskModal').classList.remove('open');
+  editingTaskId = null;
+}
+
+function saveTask() {
+  const title = document.getElementById('taskTitle').value.trim();
+  if (!title) {
+    showToast('⚠️ 請輸入任務名稱', 'error');
+    document.getElementById('taskTitle').focus();
+    return;
+  }
+
+  if (editingTaskId) {
+    // Update existing
+    const task = state.tasks.find(t => t.id === editingTaskId);
+    if (task) {
+      task.title = title;
+      task.desc = document.getElementById('taskDesc').value.trim();
+      task.priority = document.getElementById('taskPriority').value;
+      task.category = document.getElementById('taskCategory').value;
+      task.assignee = document.getElementById('taskAssignee').value.trim();
+      task.dueDate = document.getElementById('taskDue').value;
+      task.updatedAt = Date.now();
+    }
+    showToast('✅ 任務已更新');
+  } else {
+    // Create new
+    const newTask = {
+      id: genId(),
+      title: title,
+      desc: document.getElementById('taskDesc').value.trim(),
+      priority: document.getElementById('taskPriority').value,
+      category: document.getElementById('taskCategory').value,
+      status: 'todo',
+      assignee: document.getElementById('taskAssignee').value.trim(),
+      dueDate: document.getElementById('taskDue').value,
+      order: { todo: 0, 'in-progress': 0, done: 0 },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    // Place at start
+    state.tasks.forEach(t => {
+      if (t.status === 'todo') {
+        if (!t.order) t.order = {};
+        t.order.todo = (t.order.todo || 0) + 1;
+      }
+    });
+    state.tasks.push(newTask);
+    showToast('✨ 新任務已建立');
+  }
+
+  closeModal();
+  renderAll();
+}
+
+function deleteTask(id) {
+  if (!confirm('確定要刪除這個任務嗎？')) return;
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  renderAll();
+  showToast('🗑️ 任務已刪除');
+}
+
+// ============================================================
+// ANALYTICS DASHBOARD
+// ============================================================
+function renderAnalytics() {
+  const container = document.getElementById('analyticsContent');
+  const tasks = state.tasks;
+
+  if (tasks.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">◎</div>
+        <h3>尚無數據</h3>
+        <p>建立一些任務來查看分析洞察</p>
+      </div>`;
+    return;
+  }
+
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === 'done').length;
+  const progress = tasks.filter(t => t.status === 'in-progress').length;
+  const todo = tasks.filter(t => t.status === 'todo').length;
+  const q1 = tasks.filter(t => t.priority === 'q1').length;
+  const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
+  const overdue = tasks.filter(t => t.dueDate && t.dueDate < new Date().toISOString().slice(0,10) && t.status !== 'done').length;
+
+  // Priority breakdown
+  const priCounts = { q1: 0, q2: 0, q3: 0, q4: 0 };
+  tasks.forEach(t => { if (priCounts[t.priority] !== undefined) priCounts[t.priority]++; });
+
+  // Category breakdown
+  const catCounts = {};
+  tasks.forEach(t => {
+    const c = t.category || 'general';
+    catCounts[c] = (catCounts[c] || 0) + 1;
+  });
+
+  const avgCompletion = total > 0 ? completionRate : 0;
+
+  container.innerHTML = `
+    <div class="analytics-grid">
+      <div class="stat-card">
+        <div class="stat-label">總任務數</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">${done} 已完成 · ${progress} 進行中 · ${todo} 待辦</div>
+        <div class="stat-icon">📋</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">完成率</div>
+        <div class="stat-value">${completionRate}%</div>
+        <div class="stat-sub">${done} / ${total} 任務完成</div>
+        <div class="stat-icon">📈</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Q1 重要·緊急</div>
+        <div class="stat-value" style="color:var(--pri-q1)">${q1}</div>
+        <div class="stat-sub">需要立即關注</div>
+        <div class="stat-icon">🔴</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">逾期項目</div>
+        <div class="stat-value" style="color:${overdue > 0 ? 'var(--pri-q1)' : 'var(--pri-q4)'}">${overdue}</div>
+        <div class="stat-sub">${overdue > 0 ? '需儘快處理' : '一切按計劃進行'} </div>
+        <div class="stat-icon">📅</div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>📊 優先級分佈</h3>
+        <div class="chart-wrapper">
+          <canvas id="chartPriority"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>📊 分類分佈</h3>
+        <div class="chart-wrapper">
+          <canvas id="chartCategory"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="metrics-table">
+      <table>
+        <thead>
+          <tr><th>任務</th><th>優先級</th><th>分類</th><th>狀態</th><th>負責人</th><th>到期日</th></tr>
+        </thead>
+        <tbody>
+          ${tasks.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 15).map(t => `
+            <tr>
+              <td><strong>${escHtml(t.title)}</strong></td>
+              <td><span class="pri-badge ${t.priority || 'q2'}">${PRIORITY_LABELS[t.priority] || 'Q2'}</span></td>
+              <td style="color:${CATEGORY_COLORS[t.category] || '#B0A9A2'}">${CATEGORY_LABELS[t.category] || t.category || '一般'}</td>
+              <td>${statusLabel(t.status)}</td>
+              <td>${t.assignee || '—'}</td>
+              <td>${t.dueDate ? new Date(t.dueDate).toLocaleDateString('zh-TW', {month:'short', day:'numeric'}) : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Render charts after DOM update
+  requestAnimationFrame(() => {
+    renderPriorityChart(priCounts);
+    renderCategoryChart(catCounts);
+  });
+}
+
+function renderPriorityChart(priCounts) {
+  const canvas = document.getElementById('chartPriority');
+  if (!canvas) return;
+  if (chartPie) { chartPie.destroy(); chartPie = null; }
+  const ctx = canvas.getContext('2d');
+  chartPie = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Q1 重要·緊急', 'Q2 重要·不緊急', 'Q3 緊急·不重要', 'Q4 不重要·不緊急'],
+      datasets: [{
+        data: [priCounts.q1, priCounts.q2, priCounts.q3, priCounts.q4],
+        backgroundColor: ['#D4726A', '#7A9EB1', '#E8A87C', '#B0A9A2'],
+        borderWidth: 0,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '65%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { font: { size: 11, family: 'Inter' }, padding: 12, usePointStyle: true, pointStyle: 'circle' }
+        }
+      }
+    }
+  });
+}
+
+function renderCategoryChart(catCounts) {
+  const canvas = document.getElementById('chartCategory');
+  if (!canvas) return;
+  if (chartBar) { chartBar.destroy(); chartBar = null; }
+  const labels = Object.keys(catCounts).map(k => CATEGORY_LABELS[k] || k);
+  const data = Object.values(catCounts);
+  const colors = Object.keys(catCounts).map(k => CATEGORY_COLORS[k] || '#B0A9A2');
+
+  const ctx = canvas.getContext('2d');
+  chartBar = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(c => c + '66'),
+        borderColor: colors,
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.x} 個任務` } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#E8E3DE50' }, ticks: { font: { size: 10 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === 'n' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); openNewTask(); }
+});
+
+// ============================================================
+// SERVICE WORKER (PWA)
+// ============================================================
+function registerSW() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('✅ TaskZen SW registered'))
+      .catch((err) => console.warn('SW registration failed', err));
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  // Ensure all tasks have order objects
+  state.tasks.forEach(t => {
+    if (!t.order) t.order = { todo: 0, 'in-progress': 0, done: 0 };
+    const status = t.status;
+    if (t.order[status] === undefined) t.order[status] = 0;
+  });
+  registerSW();
+  initSync();
+  renderAll();
+  // Highlight current filter
+  document.querySelector(`.nav-item[data-filter="${state.filter || 'all'}"]`)?.classList.add('active');
+}
+
+// Wait for Chart.js and Sortable to load
+let loadCheck = setInterval(() => {
+  if (typeof Sortable !== 'undefined' && typeof Chart !== 'undefined') {
+    clearInterval(loadCheck);
+    init();
+  }
+}, 50);
+
+// Fallback timeout
+setTimeout(() => {
+  if (typeof Sortable === 'undefined' || typeof Chart === 'undefined') {
+    console.warn('CDN dependencies not loaded, initializing with degraded functionality');
+    init();
+  }
+}, 5000);
+</script>
+</body>
+</html>
