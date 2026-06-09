@@ -14,6 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 <!-- SortableJS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
+<!-- PeerJS -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
 <style>
 /* ============================================================
    DESIGN TOKENS — 禪意美學設計系統
@@ -1065,12 +1067,10 @@ ul { list-style: none; }
 // STATE
 // ============================================================
 const STORAGE_KEY = 'taskzen_state';
-// Cross-device sync
-const SYNC_INTERVAL = 3000; // poll every 3s
-const SYNC_ROOM = 'default';
-const SYNC_URL = '/.netlify/functions/sync';
-let syncTimer = null;
-let lastPushedUpdated = 0;
+// Peer-to-peer sync (PeerJS / WebRTC)
+const PEER_ROOM = 'taskzen-' + (new URLSearchParams(location.search).get('room') || 'default');
+let peer = null;
+let peerConnections = []; // array of DataConnection objects
 
 const DEFAULT_STATE = {
   tasks: [],
@@ -1158,82 +1158,81 @@ function broadcastChange() {
 }
 
 // ============================================================
-// CROSS-DEVICE SYNC (Netlify Function + Blob)
+// CROSS-DEVICE SYNC (PeerJS / WebRTC)
 // ============================================================
-function setSyncStatus(stateStr) {
+function setSyncStatus(s) {
   const el = document.getElementById('syncStatus');
   if (!el) return;
   el.className = 'sync-indicator';
-  if (stateStr === 'syncing') { el.textContent = '⟳'; el.classList.add('syncing'); }
-  else if (stateStr === 'ok') { el.textContent = '✓'; el.classList.add('ok'); }
-  else if (stateStr === 'error') { el.textContent = '⚠'; el.classList.add('error'); }
+  if (s === 'syncing') { el.textContent = '⟳'; el.classList.add('syncing'); }
+  else if (s === 'ok') { el.textContent = '✓'; el.classList.add('ok'); }
+  else if (s === 'error') { el.textContent = '⚠'; el.classList.add('error'); }
+  else if (s === 'peers') { el.textContent = '⟐'; el.classList.add('ok'); }
   else { el.textContent = '○'; }
 }
 
-function pushToServer() {
-  if (state.lastUpdated <= lastPushedUpdated) return Promise.resolve(false);
-  setSyncStatus('syncing');
-  return fetch(SYNC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      room: SYNC_ROOM,
-      tasks: state.tasks,
-      nextId: state.nextId,
-      lastUpdated: state.lastUpdated,
-    }),
-  })
-  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(() => {
-    lastPushedUpdated = state.lastUpdated;
-    setSyncStatus('ok');
-    return true;
-  })
-  .catch(err => {
-    console.warn('Sync push failed:', err);
-    setSyncStatus('error');
-    return false;
-  });
+function sendStateTo(conn) {
+  try { conn.send({ type: 'sync', tasks: state.tasks, nextId: state.nextId, lastUpdated: Date.now() }); }
+  catch (e) { /* ignore */ }
 }
 
-function pullFromServer() {
-  setSyncStatus('syncing');
-  return fetch(SYNC_URL + '?room=' + encodeURIComponent(SYNC_ROOM))
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(data => {
-      if (data && data.tasks && data.lastUpdated > state.lastUpdated) {
-        state.tasks = data.tasks;
-        state.nextId = data.nextId || state.nextId;
-        // Keep local filter/search/view preferences
-        state.lastUpdated = data.lastUpdated;
-        lastPushedUpdated = data.lastUpdated;
-        renderAll();
-        showToast('🔄 已同步其他裝置的更新', 'success');
-      }
+function broadcastToPeers() {
+  state.lastUpdated = Date.now();
+  peerConnections = peerConnections.filter(c => c.open);
+  peerConnections.forEach(c => sendStateTo(c));
+}
+
+function onPeerData(data) {
+  if (data && data.type === 'sync' && data.lastUpdated > state.lastUpdated) {
+    state.tasks = data.tasks;
+    state.nextId = data.nextId || state.nextId;
+    state.lastUpdated = data.lastUpdated;
+    renderAll();
+    showToast('🔄 已同步其他裝置的更新', 'success');
+  }
+}
+
+function initPeerSync() {
+  if (typeof Peer === 'undefined') { setSyncStatus('error'); return; }
+
+  try {
+    peer = new Peer(PEER_ROOM);
+
+    peer.on('open', () => {
       setSyncStatus('ok');
-      return true;
-    })
-    .catch(err => {
-      console.warn('Sync pull failed:', err);
-      setSyncStatus('error');
-      return false;
+      // Host mode — accept incoming connections
+      peer.on('connection', (conn) => {
+        conn.on('data', onPeerData);
+        conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
+        conn.on('close', () => { peerConnections = peerConnections.filter(c => c !== conn); setSyncStatus(peerConnections.length ? 'peers' : 'ok'); });
+      });
     });
-}
 
-// Debounced push — avoid flooding on rapid changes
-let pushDebounceTimer = null;
-function schedulePush() {
-  clearTimeout(pushDebounceTimer);
-  pushDebounceTimer = setTimeout(pushToServer, 800);
-}
+    peer.on('connection', (conn) => {
+      conn.on('data', onPeerData);
+      conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
+      conn.on('close', () => { peerConnections = peerConnections.filter(c => c !== conn); setSyncStatus(peerConnections.length ? 'peers' : 'ok'); });
+    });
 
-function startCrossDeviceSync() {
-  pullFromServer(); // initial fetch
-  syncTimer = setInterval(pullFromServer, SYNC_INTERVAL);
-}
-
-function stopCrossDeviceSync() {
-  if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
+    peer.on('error', (err) => {
+      if (err.type === 'unavailable-id') {
+        // Room exists — join as guest
+        peer.destroy();
+        peer = new Peer();
+        peer.on('open', () => {
+          const conn = peer.connect(PEER_ROOM);
+          conn.on('data', onPeerData);
+          conn.on('open', () => { peerConnections.push(conn); setSyncStatus('peers'); sendStateTo(conn); });
+          conn.on('close', () => { peerConnections = peerConnections.filter(c => c !== conn); setSyncStatus('error'); });
+        });
+        peer.on('error', () => setSyncStatus('error'));
+      } else if (err.type !== 'disconnected') {
+        setSyncStatus('error');
+      }
+    });
+  } catch (e) {
+    setSyncStatus('error');
+  }
 }
 
 // ============================================================
@@ -1305,7 +1304,7 @@ function renderAll() {
   renderSidebarCounts();
   renderAnalytics();
   saveState();
-  schedulePush();
+  broadcastToPeers();
 }
 
 function renderBoard() {
@@ -1849,8 +1848,8 @@ function init() {
   // Highlight current filter
   document.querySelector(`.nav-item[data-filter="${state.filter || 'all'}"]`)?.classList.add('active');
 
-  // Start cross-device sync (poll server every 3s)
-  startCrossDeviceSync();
+  // Start cross-device sync (PeerJS / WebRTC)
+  initPeerSync();
 
   // Re-check daily tasks when tab becomes visible (user might cross midnight)
   document.addEventListener('visibilitychange', () => {
