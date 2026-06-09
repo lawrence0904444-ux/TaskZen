@@ -1220,6 +1220,7 @@ function queueSupabaseSync() {
 
 async function pushToSupabase() {
   if (!sb || isSyncing) return;
+  if (state.lastUpdated === 0) return; // never push seed data to cloud
   isSyncing = true;
   setSyncStatus('syncing');
   try {
@@ -1341,6 +1342,7 @@ function renderAll() {
   renderSidebarCounts();
   renderAnalytics();
   saveState();
+  queueSupabaseSync();
 }
 
 function renderBoard() {
