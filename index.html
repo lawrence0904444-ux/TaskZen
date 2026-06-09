@@ -1047,11 +1047,13 @@ function saveState() {
 // ============================================================
 // REAL-TIME SYNC (BroadcastChannel)
 // ============================================================
+const SESSION_ID = Math.random().toString(36).slice(2, 10);
+
 function initSync() {
   try {
     bc = new BroadcastChannel('taskzen_sync');
     bc.onmessage = (e) => {
-      if (e.data && e.data.type === 'state_updated') {
+      if (e.data && e.data.type === 'state_updated' && e.data.session !== SESSION_ID) {
         const fresh = loadState();
         if (fresh && fresh.tasks) {
           state = fresh;
@@ -1064,7 +1066,7 @@ function initSync() {
 }
 function broadcastChange() {
   if (bc) {
-    try { bc.postMessage({ type: 'state_updated', timestamp: Date.now() }); } catch (e) { /* ignore */ }
+    try { bc.postMessage({ type: 'state_updated', session: SESSION_ID, timestamp: Date.now() }); } catch (e) { /* ignore */ }
   }
 }
 
