@@ -1904,18 +1904,25 @@ function initPrioritySelect() {
 
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
+    e.preventDefault();
     sel.classList.toggle('open');
   });
 
   options.forEach(opt => {
     opt.addEventListener('click', (e) => {
       e.stopPropagation();
-      setValue(opt.dataset.value, opt.querySelector('span:last-child').textContent);
+      e.preventDefault();
+      setValue(opt.dataset.value, opt.querySelector('span:last-child').textContent.trim());
       sel.classList.remove('open');
     });
   });
 
-  document.addEventListener('click', () => sel.classList.remove('open'));
+  const modal = document.getElementById('taskModal');
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) sel.classList.remove('open');
+    });
+  }
 }
 
 // Sync custom select when opening new/edit modal
