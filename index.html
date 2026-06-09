@@ -742,11 +742,14 @@ ul { list-style: none; }
     min-width: 0;
     max-height: none;
     height: auto;
+    overflow: visible;
   }
   .board-col .col-header { position: sticky; top: 0; z-index: 2; }
-  .board-col .col-body {
-    max-height: 40vh;
+  .board-col .col-cards {
+    max-height: 45vh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--space-sm);
   }
   .analytics-grid { grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
   .stat-card { padding: var(--space-md); }
@@ -776,7 +779,7 @@ ul { list-style: none; }
 @media (max-width: 480px) {
   .sidebar { width: 80vw; }
   .analytics-grid { grid-template-columns: 1fr; }
-  .board-col .col-body { max-height: 35vh; }
+  .board-col .col-cards { max-height: 35vh; }
   .stat-card .stat-value { font-size: 1.375rem; }
   .charts-row { padding: 0; }
   .metrics-table { font-size: 0.75rem; }
