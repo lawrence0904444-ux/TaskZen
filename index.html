@@ -543,6 +543,47 @@ ul { list-style: none; }
   grid-template-columns: 1fr 1fr;
   gap: var(--space-md);
 }
+/* Custom checkbox */
+.form-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  font-size: 0.875rem;
+  user-select: none;
+  padding: 6px 0;
+}
+.form-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0; height: 0;
+}
+.checkbox-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-light);
+  border-radius: 4px;
+  transition: all var(--duration-fast) ease;
+  flex-shrink: 0;
+  background: var(--bg-card);
+}
+.form-checkbox input:checked + .checkbox-mark {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.form-checkbox input:checked + .checkbox-mark::after {
+  content: '✓';
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.form-checkbox input:focus-visible + .checkbox-mark {
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
 
 /* Category tag input */
 .category-list {
@@ -986,6 +1027,13 @@ ul { list-style: none; }
           <input class="form-input" type="date" id="taskDue">
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-checkbox">
+          <input type="checkbox" id="taskDaily">
+          <span class="checkbox-mark"></span>
+          <span>每日任務 <small style="color:var(--text-tertiary);font-weight:400">（完成後明天自動重置為待辦）</small></span>
+        </label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal()">取消</button>
@@ -1017,7 +1065,10 @@ const SEED_TASKS = [
   { id: 3, title: '研究競品分析', desc: '分析市面上相似產品的優缺點', priority: 'q4', category: 'research', status: 'todo', assignee: '', dueDate: '', order: { todo: 0, 'in-progress': 0, done: 2 }, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },
   { id: 4, title: '修復登入頁面 Bug', desc: '使用者回報在 Safari 上無法登入', priority: 'q1', category: 'development', status: 'todo', assignee: 'Alex', dueDate: new Date(Date.now() + 86400000).toISOString().slice(0,10), order: { todo: 1, 'in-progress': 0, done: 3 }, createdAt: Date.now(), updatedAt: Date.now() },
   { id: 5, title: '團隊同步會議', desc: '每週 sprint planning', priority: 'q3', category: 'meeting', status: 'todo', assignee: '', dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0,10), order: { todo: 2, 'in-progress': 0, done: 4 }, createdAt: Date.now(), updatedAt: Date.now() },
-  { id: 6, title: '閱讀《簡潔的架構》', desc: 'Chapter 5-7', priority: 'q4', category: 'personal', status: 'in-progress', assignee: '', dueDate: '', order: { todo: 3, 'in-progress': 1, done: 5 }, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: 6, title: '閱讀《簡潔的架構》', desc: 'Chapter 5-7', priority: 'q4', category: 'personal', status: 'in-progress', assignee: '', dueDate: '', daily: false, completedDate: '', order: { todo: 3, 'in-progress': 1, done: 5 }, createdAt: Date.now(), updatedAt: Date.now() },
+  // 每日任務種子資料（已完成，但明天會自動重置）
+  { id: 7, title: '☀️ 晨間冥想', desc: '10 分鐘正念冥想', priority: 'q2', category: 'personal', status: 'done', assignee: '', dueDate: '', daily: true, completedDate: new Date().toISOString().slice(0, 10), order: { todo: 4, 'in-progress': 2, done: 6 }, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: 8, title: '📝 日回顧', desc: '記錄今天學到的三件事', priority: 'q4', category: 'personal', status: 'todo', assignee: '', dueDate: '', daily: true, completedDate: '', order: { todo: 5, 'in-progress': 3, done: 7 }, createdAt: Date.now(), updatedAt: Date.now() },
 ];
 
 let state = loadState();
@@ -1193,6 +1244,7 @@ function renderTaskCard(task) {
   let metaParts = [];
   if (task.category) metaParts.push(`<span class="card-tag" style="background:${catColor}22;color:${catColor}">${catLabel}</span>`);
   if (task.assignee) metaParts.push(`<span class="card-assignee">👤 ${task.assignee}</span>`);
+  if (task.daily) metaParts.push(`<span class="card-daily" title="每日任務（每天重置）">🔄</span>`);
   if (task.dueDate) {
     const d = new Date(task.dueDate);
     const today = new Date().toISOString().slice(0,10);
@@ -1258,6 +1310,14 @@ function initSortable() {
         if (task) {
           task.status = toStatus;
           task.updatedAt = Date.now();
+          // If daily task moved to 'done', record completion date
+          if (task.daily && toStatus === 'done') {
+            task.completedDate = new Date().toISOString().slice(0, 10);
+          }
+          // If moved out of 'done' (incomplete), clear completedDate
+          if (task.daily && toStatus !== 'done') {
+            task.completedDate = '';
+          }
         }
 
         // Normalize: ensure order fields exist
@@ -1356,6 +1416,7 @@ function openNewTask() {
   document.getElementById('taskCategory').value = 'general';
   document.getElementById('taskAssignee').value = '';
   document.getElementById('taskDue').value = '';
+  document.getElementById('taskDaily').checked = false;
   document.getElementById('taskTitle').focus();
   document.getElementById('taskModal').classList.add('open');
 }
@@ -1372,6 +1433,7 @@ function editTask(id) {
   document.getElementById('taskCategory').value = task.category || 'general';
   document.getElementById('taskAssignee').value = task.assignee || '';
   document.getElementById('taskDue').value = task.dueDate || '';
+  document.getElementById('taskDaily').checked = !!task.daily;
   document.getElementById('taskModal').classList.add('open');
 }
 
@@ -1398,6 +1460,9 @@ function saveTask() {
       task.category = document.getElementById('taskCategory').value;
       task.assignee = document.getElementById('taskAssignee').value.trim();
       task.dueDate = document.getElementById('taskDue').value;
+      task.daily = document.getElementById('taskDaily').checked;
+      // If was done+daily but user unchecks daily, clear completedDate
+      if (!task.daily) task.completedDate = '';
       task.updatedAt = Date.now();
     }
     showToast('✅ 任務已更新');
@@ -1412,6 +1477,8 @@ function saveTask() {
       status: 'todo',
       assignee: document.getElementById('taskAssignee').value.trim(),
       dueDate: document.getElementById('taskDue').value,
+      daily: document.getElementById('taskDaily').checked,
+      completedDate: '',
       order: { todo: 0, 'in-progress': 0, done: 0 },
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -1636,18 +1703,51 @@ function registerSW() {
 // ============================================================
 // INIT
 // ============================================================
-function init() {
-  // Ensure all tasks have order objects
+// DAILY TASK RESET
+// ============================================================
+function migrateOldTasks() {
   state.tasks.forEach(t => {
+    if (t.daily === undefined) t.daily = false;
+    if (t.completedDate === undefined) t.completedDate = '';
     if (!t.order) t.order = { todo: 0, 'in-progress': 0, done: 0 };
     const status = t.status;
     if (t.order[status] === undefined) t.order[status] = 0;
   });
+}
+
+function resetDailyTasks() {
+  const today = new Date().toISOString().slice(0, 10);
+  let resetCount = 0;
+  state.tasks.forEach(t => {
+    if (t.daily && t.status === 'done' && t.completedDate && t.completedDate !== today) {
+      t.status = 'todo';
+      t.completedDate = '';
+      t.updatedAt = Date.now();
+      resetCount++;
+    }
+  });
+  if (resetCount > 0) {
+    renderAll();
+    showToast(`🔄 ${resetCount} 個每日任務已自動重置`, 'success');
+  }
+}
+
+// ============================================================
+function init() {
+  migrateOldTasks();
+  resetDailyTasks();
   registerSW();
   initSync();
   renderAll();
   // Highlight current filter
   document.querySelector(`.nav-item[data-filter="${state.filter || 'all'}"]`)?.classList.add('active');
+
+  // Re-check daily tasks when tab becomes visible (user might cross midnight)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) resetDailyTasks();
+  });
+  // Also check every 60s in case user leaves the tab open
+  setInterval(resetDailyTasks, 60000);
 }
 
 // Wait for Chart.js and Sortable to load
