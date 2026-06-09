@@ -689,7 +689,9 @@ ul { list-style: none; }
   .sidebar {
     position: fixed;
     left: 0; top: 0; bottom: 0;
+    width: min(280px, 75vw);
     transform: translateX(-100%);
+    z-index: 30;
   }
   .sidebar.open { transform: translateX(0); }
   .sidebar-overlay {
@@ -701,15 +703,85 @@ ul { list-style: none; }
     transition: opacity var(--duration-normal) ease;
   }
   .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
-  .header { padding: 0 var(--space-md); }
-  .header-search { width: 140px; }
-  .header-search:focus-within { width: 180px; }
-  .view-pane { padding: var(--space-md); }
+  .header {
+    padding: 0 var(--space-sm);
+    gap: var(--space-xs);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .header-title { display: none; }
+  .header-search {
+    width: 32px;
+    background: transparent;
+    border-color: transparent;
+    padding: 0;
+    justify-content: center;
+    order: -1;
+  }
+  .header-search input { display: none; }
+  .header-search .icon { font-size: 1.25rem; color: var(--text-secondary); }
+  .header-search.search-expanded {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: var(--bg-card);
+    border-color: var(--accent);
+    border-radius: 0;
+    padding: 0 var(--space-md);
+    z-index: 10;
+  }
+  .header-search.search-expanded input { display: block; }
+  .header-search.search-expanded .icon { font-size: 0.875rem; }
+  .header-actions .btn-secondary { display: none; }
+  .view-pane {
+    padding: var(--space-sm);
+    padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  }
   .board-columns { flex-direction: column; gap: var(--space-md); }
-  .board-col { min-width: 0; max-height: 300px; }
-  .analytics-grid { grid-template-columns: 1fr 1fr; }
+  .board-col {
+    min-width: 0;
+    max-height: none;
+    height: auto;
+  }
+  .board-col .col-header { position: sticky; top: 0; z-index: 2; }
+  .board-col .col-body {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+  .analytics-grid { grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
+  .stat-card { padding: var(--space-md); }
+  .stat-card .stat-value { font-size: 1.5rem; }
   .form-row { grid-template-columns: 1fr; }
   .menu-toggle { display: flex !important; }
+  /* Modal fullscreen on mobile */
+  .modal { width: 100%; max-width: 100vw; max-height: 100vh; border-radius: 0; }
+  .modal-body { padding: var(--space-lg); }
+  .modal-header { padding: var(--space-md) var(--space-lg); }
+  .modal-footer { padding: var(--space-sm) var(--space-lg); }
+  .form-group { margin-bottom: var(--space-md); }
+  /* Larger touch targets */
+  .btn { min-height: 44px; padding: 10px 18px; font-size: 0.875rem; }
+  .btn-sm { min-height: 44px; padding: 8px 16px; }
+  .btn-icon { min-width: 44px; min-height: 44px; width: 44px; height: 44px; }
+  .nav-item { min-height: 44px; padding: 10px var(--space-lg); }
+  .modal-close { min-width: 44px; min-height: 44px; width: 44px; height: 44px; }
+  .task-card .card-actions button { min-width: 36px; min-height: 36px; }
+  /* Card spacing for tap */
+  .task-card { padding: var(--space-sm); }
+  .task-card .card-title { font-size: 0.9375rem; }
+  .task-card .card-desc { font-size: 0.8125rem; }
+  .task-card .card-meta { font-size: 0.75rem; }
+}
+/* Small phones */
+@media (max-width: 480px) {
+  .sidebar { width: 80vw; }
+  .analytics-grid { grid-template-columns: 1fr; }
+  .board-col .col-body { max-height: 35vh; }
+  .stat-card .stat-value { font-size: 1.375rem; }
+  .charts-row { padding: 0; }
+  .metrics-table { font-size: 0.75rem; }
+  .metrics-table th, .metrics-table td { padding: var(--space-xs) var(--space-sm); }
+  .pri-badge { font-size: 0.625rem; padding: 1px 6px; }
 }
 
 /* ============================================================
@@ -817,8 +889,8 @@ ul { list-style: none; }
     <header class="header">
       <button class="btn btn-ghost btn-icon menu-toggle" onclick="toggleSidebar()" aria-label="選單">☰</button>
       <div class="header-title"><span id="viewTitle">看板</span></div>
-      <div class="header-search">
-        <span class="icon">⌕</span>
+      <div class="header-search" id="searchContainer">
+        <span class="icon" onclick="toggleSearch()">⌕</span>
         <input type="text" id="searchInput" placeholder="搜尋任務..." oninput="onSearch(event)">
       </div>
       <div class="header-actions">
@@ -1221,7 +1293,23 @@ function setFilter(filter) {
   const el = document.querySelector(`.nav-item[data-filter="${filter}"]`);
   if (el) el.classList.add('active');
   renderBoard();
+  if (window.innerWidth <= 768) closeSidebar();
 }
+
+function toggleSearch() {
+  const container = document.getElementById('searchContainer');
+  const isExpanded = container.classList.toggle('search-expanded');
+  if (isExpanded) {
+    setTimeout(() => document.querySelector('#searchContainer input').focus(), 100);
+  }
+}
+// Close mobile search when clicking outside
+document.addEventListener('click', function(e) {
+  const container = document.getElementById('searchContainer');
+  if (container.classList.contains('search-expanded') && !container.contains(e.target)) {
+    container.classList.remove('search-expanded');
+  }
+});
 
 function onSearch(e) {
   state.search = e.target.value;
