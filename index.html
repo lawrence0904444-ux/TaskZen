@@ -89,7 +89,6 @@
   --sidebar-w: 240px;
   --header-h: 64px;
 }
-}
 
 /* ============================================================
    RESET & BASE
@@ -1149,7 +1148,12 @@ function initSync() {
         const fresh = loadState();
         if (fresh && fresh.tasks) {
           state = fresh;
-          renderAll();
+          // 只重繪，不 saveState（資料已由發送端寫入 localStorage）
+          // 不 broadcastChange（避免跨分頁無限迴圈）
+          // 不 queueSupabaseSync（由發送端負責雲端同步）
+          renderBoard();
+          renderSidebarCounts();
+          renderAnalytics();
           showToast('🔄 資料已同步', 'success');
         }
       }
@@ -1197,7 +1201,7 @@ function initSupabaseSync() {
           state.tasks = data.tasks;
           state.nextId = data.next_id || state.nextId;
           state.lastUpdated = data.last_updated;
-          renderAll();
+          renderAll(true); // skipSync: 不回推已拉取的資料
           showToast('🔄 已同步其他裝置的更新', 'success');
         }
       }
@@ -1254,7 +1258,7 @@ async function pullFromSupabase() {
       state.tasks = data.tasks;
       state.nextId = data.next_id || state.nextId;
       state.lastUpdated = data.last_updated;
-      renderAll();
+      renderAll(true); // skipSync: 不回推已拉取的資料
     }
     setSyncStatus('ok');
   } catch (err) {
@@ -1337,12 +1341,12 @@ function showToast(msg, type = '') {
 // ============================================================
 // RENDER
 // ============================================================
-function renderAll() {
+function renderAll(skipSync) {
   renderBoard();
   renderSidebarCounts();
   renderAnalytics();
   saveState();
-  queueSupabaseSync();
+  if (!skipSync) queueSupabaseSync();
 }
 
 function renderBoard() {
@@ -1871,8 +1875,10 @@ function resetDailyTasks() {
     }
   });
   if (resetCount > 0) {
-    state.lastUpdated = Date.now();
-    renderAll();
+    // 種子保護：lastUpdated === 0 時不推雲端，避免汙染 Supabase
+    const isSeed = state.lastUpdated === 0;
+    if (!isSeed) state.lastUpdated = Date.now();
+    renderAll(isSeed); // 種子資料不觸發雲端同步
     showToast(`🔄 ${resetCount} 個每日任務已自動重置`, 'success');
   }
 }
